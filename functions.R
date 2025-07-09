@@ -89,6 +89,167 @@ generate_SBM <- function(n, B, C, rho, TT){
   return(A)
 }
 
+#' @title Static SBM network generator
+#' @description Generates stochastic block models adjacency matrices
+#' @param n number of nodes
+#' @param Z Node membership matrix
+#' @param B block model probabilities
+#' @return Adjacency matrix A
+#' @export
+generate_sSBM <- function(Z, B){
+  
+  if(nrow(B)!=ncol(B)){
+    stop("B must be a square matrix")
+  }
+  
+  if(ncol(Z)!=ncol(B)){
+    stop("Number of columns in Z must match dimension of B.")
+  }
+  
+  
+  n = dim(Z)[1]
+  K = dim(Z)[2]
+  
+  P <- Z%*%B%*%t(Z)
+  A <- matrix(rbinom(n*n, 1, P), n, n)
+  A[lower.tri(A)] <- 0
+  A = A + t(A)
+  diag(A) <- 0
+  
+  return(A)
+}
+
+
+#' @title Dynamic SBM network generator
+#' @description Generates dynamic stochastic block models adjacency matrices. Currently restricted to only K=2 block SBMs
+#' @param n number of nodes
+#' @param TT number of timesteps
+#' @param B block model probabilities
+#' @param PI communities transition matrix
+#' @param alpha stationary distribution
+#' @return Array of adjacency matrices
+#' @export
+generate_dynSBM <- function(n, TT, B, PI, alpha){
+  
+  if(nrow(B)!=ncol(B)){
+    stop("B must be a square matrix")
+  }
+  
+  if(nrow(PI)!=ncol(PI)){
+    stop("PI must be a square matrix")
+  }
+  
+  if(nrow(B)!=ncol(PI)){
+    stop("B and PI must have the same dimensions.")
+  }
+  
+  if(nrow(B)!=length(alpha)){
+    stop("Length of alpha must match dimension of B (and PI)")
+  }
+  
+  
+  A <- array(0, c(n, n, TT))
+  K = dim(B)[1]
+  
+  # Generate initial community labels and first snapshot
+  C <- sample(1:K, n, TRUE, alpha)
+  
+  # Membership matrix
+  C <- as.factor(C)
+  Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
+  
+  A[,,1] <- generate_sSBM(Z, B)
+  
+  for(t in 2:TT){
+    # Update community labels (this only works if K=2 right now)
+    C = rbinom(n, 1, Z%*%PI[,1]) + 1
+    
+    C <- as.factor(C)
+    Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
+    
+    A[,,t] <- generate_sSBM(Z, B)
+  }
+  
+  return(A)
+}
+
+
+#' @title Static DCBM network generator
+#' @description Generates degree-corrected block models adjacency matrix
+#' @param Z Node membership matrix
+#' @param B block model probabilities
+#' @param eps range of node degree weight parameters
+#' @return Adjacency matrix A
+#' @export
+generate_sDCBM <- function(Z, B, eps){
+  
+  if(nrow(B)!=ncol(B)){
+    stop("B must be a square matrix")
+  }
+  
+  if(ncol(Z)!=ncol(B)){
+    stop("Number of columns in Z must match dimension of B.")
+  }
+  
+  
+  n = dim(Z)[1]
+  K = dim(Z)[2]
+  
+  theta <- runif(n, 1-eps/2, 1+eps/2)
+  
+  P <- Z%*%B%*%t(Z)
+  P <- theta%*%t(theta) * P
+  diag(P) <- 0
+  P[P > 1] <- 1
+  
+  A <- matrix(rbinom(n*n, 1, P), n, n)
+  A[lower.tri(A)] <- 0
+  A = A + t(A)
+  diag(A) <- 0
+  return(A)
+}
+
+
+#' @title Dynamic DCBM network generator
+#' @description Generates dynamic degree-corrected block models adjacency matrices. Currently restricted to only K=2 block SBMs
+#' @param n number of nodes
+#' @param TT number of timesteps
+#' @param B block model probabilities
+#' @param PI communities transition matrix
+#' @param alpha stationary distribution
+#' @param eps range of node degree weight parameters
+#' @return Array of adjacency matrices
+#' @export
+generate_dynDCBM <- function(n, TT, B, PI, alpha, eps){
+  A <- array(0, c(n, n, TT))
+  K = dim(B)[1]
+  
+  # Check that dim of B and PI and length(alpha) all align
+  
+  # Generate initial community labels and first snapshot
+  C <- sample(1:K, n, TRUE, alpha)
+  
+  # Membership matrix
+  C <- as.factor(C)
+  Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
+  
+  A[,,1] <- generate_sDCBM(Z, B, eps)
+  
+  for(t in 2:TT){
+    # Update community labels (this only works if K=2 right now)
+    C = rbinom(n, 1, Z%*%PI[,1]) + 1
+    
+    C <- as.factor(C)
+    Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
+    
+    A[,,t] <- generate_sDCBM(Z, B, eps)
+  }
+  
+  return(A)
+}
+
+
+
 #' @title Erdos-Renyi network generator
 #' @description Generates adjacency matrix from Erdos-Renyi model
 #' @param n number of nodes
