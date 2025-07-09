@@ -29,6 +29,7 @@ generatePsbm <- function(A, B, C, rho){
   n = dim(A)[1]
   K = length(unique(C))
   C <- as.factor(C)
+  
   # Membership matrix
   Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
   # Probabilities before incorporating correlation
@@ -38,13 +39,6 @@ generatePsbm <- function(A, B, C, rho){
 }
 
 
-# Generate correlated SBM networks
-# n: number of nodes
-# B: edge probability matrix
-# C: community labels
-# rho: correlation
-# TT: number of time steps
-
 #' @title Correlated SBMs network generator
 #' @description Generates correlated stochastic block models adjacency matrices
 #' @param n number of nodes
@@ -52,13 +46,27 @@ generatePsbm <- function(A, B, C, rho){
 #' @param C community labels
 #' @param rho correlation parameter
 #' @param TT number of time steps
-#' @return Probability matrix P
+#' @return Array of TT adjacency matrices
 #' @export
 generate_SBM <- function(n, B, C, rho, TT){
+  
+  if(nrow(B)!=ncol(B)){
+    stop("B must be a square matrix")
+  }
+  
+  if(length(unique(C))!=ncol(B)){
+    stop("Length of C and dim of B must match.")
+  }
+  
+  if(rho<0 || rho>1){
+    stop("Rho must be between 0 and 1.")
+  }
+  
   A <- array(0, c(n, n, TT))
   
   K = length(unique(C))
   C <- as.factor(C)
+  
   # Membership matrix
   Z <- matrix(model.matrix(~C-1), nrow=n, ncol=K)
   
@@ -81,6 +89,12 @@ generate_SBM <- function(n, B, C, rho, TT){
   return(A)
 }
 
+#' @title Erdos-Renyi network generator
+#' @description Generates adjacency matrix from Erdos-Renyi model
+#' @param n number of nodes
+#' @param p edge probability
+#' @return Adjacency matrix A
+#' @export
 generateER <- function(n, p){
   A <- matrix(0, n, n)
   A <- matrix(rbinom(n*n, 1, p), n, n)
@@ -90,8 +104,16 @@ generateER <- function(n, p){
   return(A)
 }
 
-## Bickel p-value for temporal network A
+#' @title Community detection p-value
+#' @description Computes p-value for testing against ER null using Bickel and Sarkar (2016) method
+#' @param A adjacency matrix
+#' @return p-value for each temporal snapshot
+#' @export
 spectral.pval <- function(A){
+  
+  if(nrow(A)!=ncol(A)){
+    stop("A must be a square matrix")
+  }
   
   n=dim(A)[1]
   TT = dim(A)[3]
@@ -113,7 +135,16 @@ spectral.pval <- function(A){
   return(pval)
 }
 
+#' @title Community detection p-value (with bootstrap)
+#' @description Computes p-value for testing against ER null using Bickel and Sarkar (2016) bootstrap method
+#' @param A adjacency matrix
+#' @return p-value for each temporal snapshot
+#' @export
 spectral.adj.pval <- function(A){
+  
+  if(nrow(A)!=ncol(A)){
+    stop("A must be a square matrix")
+  }
   
   n=dim(A)[1]
   TT = dim(A)[3]
@@ -157,6 +188,13 @@ spectral.adj.pval <- function(A){
 
 
 ## Convert p-value to e-value
+#' @title p-value to e-value calibrator
+#' @description Converts a p-value to an e-value using a calibrator
+#' @param p p-values
+#' @param method calibration method: int (=integrated); VS (=Vovk-Sellk); kappa (=kappa)
+#' @param kappa value to be used if method="kappa" selected
+#' @return e-value 
+#' @export
 p_to_e <- function(p, method=c("int, VS, kappa"), kappa=NULL){
   
   if(method=="int"){
@@ -186,4 +224,6 @@ p_to_e <- function(p, method=c("int, VS, kappa"), kappa=NULL){
   
   return(eval)
 }
+
+# Convert multiple p-values at once
 p_to_e <- Vectorize(p_to_e)
